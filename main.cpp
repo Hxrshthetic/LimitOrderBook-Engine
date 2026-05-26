@@ -3,17 +3,22 @@
 int main() {
     OrderBook book;
 
-    // Buy 100 shares at $100.50 (10050 cents)
-    book.addOrder({1, true, 10050, 100});
-    // Buy 200 shares at $99.75 (9975 cents)
-    book.addOrder({2, true, 9975, 200});
-    // Another buy at same price as above, should appear after ID=2 (FIFO)
-    book.addOrder({4, true, 9975, 50});
-    // Sell 50 shares at $101.25 (10125 cents)
-    book.addOrder({3, false, 10125, 50});
-    // Sell 30 shares at $102.00 (10200 cents)
-    book.addOrder({5, false, 10200, 30});
+    book.addOrder({1, true, false, 9900, 100});   // buy 100 @ 99.00
+    book.addOrder({2, false, false, 10100, 50});  // sell 50 @ 101.00
 
     book.printBook();
+
+    // Crossing buy limit order (buys at 102.00, should match against ask at 101.00)
+    book.addOrder({3, true, false, 10200, 80});   // buy 80 @ 102.00
+
+    book.printBook();
+    book.printTrades();
+
+    // Market sell order (sells 60 shares)
+    book.addOrder({4, false, true, 0, 60});       // market sell
+
+    book.printBook();
+    book.printTrades();
+
     return 0;
 }
