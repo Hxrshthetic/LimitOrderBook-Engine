@@ -1,0 +1,10 @@
+build/
+*.exe
+*.o
+*.obj
+*.out
+CMakeFiles/
+CMakeCache.txt
+Makefile
+compile_commands.json
+.vscode/
