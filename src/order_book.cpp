@@ -9,10 +9,16 @@ void OrderBook::addOrder(const Order& order) {
             auto& level = bids[remaining.price];
             level.price = remaining.price;
             level.orders.emplace_back(remaining);
+            auto list_it = std::prev(level.orders.end());
+            auto map_it = bids.find(remaining.price);
+            order_idx[remaining.order_id] = {true, map_it, list_it};
         } else {
             auto& level = asks[remaining.price];
             level.price = remaining.price;
             level.orders.emplace_back(remaining);
+            auto list_it = std::prev(level.orders.end());
+            auto map_it = asks.find(remaining.price);
+            order_idx[remaining.order_id] = {false, map_it, list_it};
         }
     }
 }
@@ -62,7 +68,9 @@ void  OrderBook::matchOrders(Order& order) {
                 order_it->quantity -= fillQty;
 
                 if(order_it->quantity == 0) {
+                    int id = order_it->order_id;
                     order_it = level.orders.erase(order_it);
+                    order_idx.erase(id);
                 } else {
                     order_it++;
                 }
@@ -89,7 +97,9 @@ void  OrderBook::matchOrders(Order& order) {
                 order_it->quantity -= fillQty;
 
                 if(order_it->quantity == 0) {
+                    int id = order_it->order_id;
                     order_it = level.orders.erase(order_it);
+                    order_idx.erase(id);
                 } else {
                     order_it++;
                 }
@@ -101,4 +111,26 @@ void  OrderBook::matchOrders(Order& order) {
             }
         }
     }
+}
+
+void OrderBook::cancelOrder(int id) {
+    auto it = order_idx.find(id);
+    if(it == order_idx.end()) {
+        std::cout << "Order: " << id << " is not found.\n";
+        return;
+    }
+
+    OrderLocation& location = order_idx[id];
+    location.level_it->second.orders.erase(location.order_it);
+
+    if(location.level_it->second.orders.empty()) {
+        if(location.is_buy) {
+            bids.erase(location.level_it);
+        } else {
+            asks.erase(location.level_it);
+        }
+    }
+
+    order_idx.erase(it);
+    std::cout << "Order " << id << " cancelled.\n";
 }

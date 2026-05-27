@@ -20,5 +20,10 @@ int main() {
     book.printBook();
     book.printTrades();
 
+    book.addOrder({5, true, false, 10000, 100});
+    book.printBook();
+    book.cancelOrder(1);
+    book.printBook();
+
     return 0;
 }
