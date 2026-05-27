@@ -28,6 +28,8 @@
 - **Limit Orders & Market Orders** — Submit resting limit orders or aggressive market orders that match immediately.
 - **Matching Engine** — Automatically crosses buy and sell orders whenever prices overlap.
 - **Partial Fills** — Unfilled quantity from a partially matched order remains resting in the book.
+- **Order Cancellation** — Cancel any resting order by its unique ID with O(1) lookup.
+- **Order Modification** — Change price, quantity, or order type (limit/market) of an existing order (atomic cancel + replace).
 - **Trade Recording & Logging** — Every fill is recorded with price, quantity, and aggressor side.
 - **Cents-Based Integer Pricing** — Prices are represented as integers (e.g., `10050` = $100.50) to avoid all floating-point issues.
 
@@ -74,7 +76,7 @@ make
 ## Usage
 
 ```cpp
-#include "orderbook.h"
+#include "include/order_book.hpp"
 
 int main() {
     OrderBook book;
@@ -91,15 +93,28 @@ int main() {
     book.printTrade();
     book.printBook();
 
+    // Buy 100 shares @ $100.00
+    book.addOrder({5, true, false, 10000, 100});
+    book.printBook();
+    // Cancel order having order_id = 1
+    book.cancelOrder(1);
+    book.printBook();
+    
+    // Buy 100 shares @ $100.00
+    book.addOrder({6, true, false, 10000, 50});
+    // Modify order having order_id = 6 with new
+    book.modifyOrder(6, 10100, 30, false);
+    book.printBook();
+
     return 0;
 }
 ```
 
-**Order struct fields:** `{ id, is_buy, is_market, price, quantity }`
+**Order struct fields:** `{ order_id, is_buy, is_market, price, quantity }`
 
 | Field       | Type   | Description                                  |
-|-------------|--------|----------------------------------------------|
-| `id`        | `int`  | Unique identifier for the order              |
+|------------ |--------|----------------------------------------------|
+| `order_id`  | `int`  | Unique identifier for the order              |
 | `is_buy`    | `bool` | `true` = buy side, `false` = sell side       |
 | `is_market` | `bool` | `true` = market order, `false` = limit order |
 | `price`     | `int`  | Price in cents (e.g., `10050` = $100.50)     |
@@ -111,7 +126,7 @@ int main() {
 
 - [x] Basic order book with `addOrder` and `printBook`
 - [x] Matching engine with market order support
-- [ ] Order cancellation & modification
+- [x] Order cancellation & modification
 - [ ] Performance metrics (latency / throughput benchmarks)
 
 ---
