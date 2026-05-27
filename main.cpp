@@ -25,5 +25,9 @@ int main() {
     book.cancelOrder(1);
     book.printBook();
 
+    book.addOrder({6, true, false, 10000, 50});
+    book.modifyOrder(6, 10100, 30, false);
+    book.printBook();
+
     return 0;
 }

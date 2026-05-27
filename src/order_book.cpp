@@ -134,3 +134,16 @@ void OrderBook::cancelOrder(int id) {
     order_idx.erase(it);
     std::cout << "Order " << id << " cancelled.\n";
 }
+
+void OrderBook::modifyOrder(int id, uint64_t new_price, int new_qty, bool is_market) {
+    auto it = order_idx.find(id);
+    if(it == order_idx.end()) {
+        std::cout << "Order " << id << " not found.\n";
+        return;
+    }
+    bool was_buy = it->second.is_buy;
+    cancelOrder(id);
+
+    Order new_order{id, was_buy, is_market, new_price, new_qty};
+    addOrder(new_order);
+}

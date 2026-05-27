@@ -28,4 +28,5 @@ public:
     void printBook() const;
     void  printTrades() const;
     void cancelOrder(int id);
+    void modifyOrder(int id, uint64_t price, int qty, bool is_market);
 };
