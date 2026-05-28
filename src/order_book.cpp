@@ -1,6 +1,11 @@
+#include <ctime>
+#include <iomanip>
 #include "order_book.hpp"
+#include "timer.hpp"
 
 void OrderBook::addOrder(const Order& order) {
+    auto start = get_time();
+
     Order remaining = order;
     matchOrders(remaining);
 
@@ -21,6 +26,38 @@ void OrderBook::addOrder(const Order& order) {
             order_idx[remaining.order_id] = {false, map_it, list_it};
         }
     }
+
+    auto end = get_time();
+    double latency = end - start;
+
+    total_orders++;
+    if(order.is_buy) {
+        buy_orders++;
+        total_buy_latency += latency;
+    } else {
+        sell_orders++;
+        total_sell_latency += latency;
+    }
+
+    if(order.is_market) {
+        market_orders++;
+        total_market_latency += latency;
+    } else {
+        limit_orders++;
+        total_limit_latency += latency;
+    }
+
+    if(latency < 1.0) latency_bucket[0]++;
+    else if(latency >= 1.0 && latency < 2.0) latency_bucket[1]++;
+    else if(latency >= 2.0 && latency < 5.0) latency_bucket[2]++;
+    else if(latency >= 5.0 && latency < 10.0) latency_bucket[3]++;
+    else if(latency >= 10.0 && latency < 50.0) latency_bucket[4]++;
+    else if(latency >= 50.0 && latency < 100.0) latency_bucket[5]++;
+    else latency_bucket[6]++;
+
+    total_latency += latency;
+    if(latency < min_latency) min_latency = latency;
+    if(latency > max_latency) max_latency = latency;
 }
 
 void OrderBook::printBook() const {
@@ -146,4 +183,85 @@ void OrderBook::modifyOrder(int id, uint64_t new_price, int new_qty, bool is_mar
 
     Order new_order{id, was_buy, is_market, new_price, new_qty};
     addOrder(new_order);
+}
+
+
+void OrderBook::printMetrics() const {
+    if (total_orders == 0) {
+        std::cout << "No orders processed yet.\n";
+        return;
+    }
+    double avg_us = total_latency / total_orders;
+    auto now = std::chrono::high_resolution_clock::now();
+    std::time_t now_time = std::chrono::system_clock::to_time_t(now);
+
+    std::cout << "Timestamp: " << std::put_time(std::localtime(&now_time), "%Y-%m-%d %H-%M-%S") << "\n ";
+    std::cout << "Orders processed: " << total_orders << "\n";
+    std::cout << "Avg latency: " << avg_us << " µs\n";
+    std::cout << "Min latency: " << min_latency << " µs\n";
+    std::cout << "Max latency: " << max_latency << " µs\n\n";
+
+    // Per-type breakdown
+    if (market_orders > 0) {
+        double market_avg = total_market_latency / market_orders;
+        std::cout << "Market orders: " << market_orders << " (avg market latency " << market_avg << " µs)\n";
+    }
+    if (limit_orders > 0) {
+        double limit_avg = total_limit_latency / limit_orders;
+        std::cout << "Limit orders: " << limit_orders << " (avg limit order latency " << limit_avg << " µs)\n";
+    }
+    // Per-side
+    if (buy_orders > 0) {
+        double buy_avg = total_buy_latency / buy_orders;
+        std::cout << "Buy orders: " << buy_orders << " (avg buy latency " << buy_avg << " µs)\n";
+    }
+    if (sell_orders > 0) {
+        double sell_avg = total_sell_latency / sell_orders;
+        std::cout << "Sell orders: " << sell_orders << " (avg sell latency " << sell_avg << " µs)\n";
+    }
+
+    // Histogram
+    std::cout << "\n--- Latency Histogram (µs) ---\n";
+    std::cout << "<1    : " << latency_bucket[0] << " orders\n";
+    std::cout << "1-2   : " << latency_bucket[1] << " orders\n";
+    std::cout << "2-5   : " << latency_bucket[2] << " orders\n";
+    std::cout << "5-10  : " << latency_bucket[3] << " orders\n";
+    std::cout << "10-50 : " << latency_bucket[4] << " orders\n";
+    std::cout << "50-100: " << latency_bucket[5] << " orders\n";
+    std::cout << ">100  : " << latency_bucket[6] << " orders\n";
+
+    std::ifstream check("metrics.csv");
+    bool empty = check.peek() == std::ifstream::traits_type::eof();
+    check.close();
+
+    std::ofstream file("metrics.csv", std::ios::app);
+    if(!file.is_open()) return;
+
+    if(empty) {
+        file << "Timestamp, OrdersProcessed, AvgLatency_us, MinLatency_us, MaxLatency_us\n";
+    }
+
+    file << std::put_time(std::localtime(&now_time), "%Y-%m-%d %H-%M-%S") << ", ";
+    file << total_orders << ", ";
+    file << avg_us << ", ";
+    file << min_latency << ", ";
+    file << max_latency << "\n";
+
+    file.close();
+}
+
+void OrderBook::resetMetrics() {
+    total_orders = 0;
+    buy_orders = 0;
+    sell_orders = 0;
+    market_orders = 0;
+    limit_orders = 0;
+
+    total_latency = 0.0;
+    total_buy_latency = 0.0;
+    total_sell_latency = 0.0;
+    total_limit_latency = 0.0;
+    total_market_latency = 0.0;
+    min_latency = 1e9;
+    max_latency = 0.0;
 }
