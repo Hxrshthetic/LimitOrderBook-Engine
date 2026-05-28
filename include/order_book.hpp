@@ -6,6 +6,8 @@
 #include <vector>
 #include <cstdint>
 #include <utility>
+#include <chrono>
+#include <fstream>
 #include "price_level.hpp"
 
 struct OrderLocation {
@@ -21,6 +23,23 @@ private:
     std::vector<std::pair<uint64_t, int>> trades; // (price, qty)
     std::unordered_map<int, OrderLocation> order_idx; // (id, location(asks? pricelevel? orderlist?))
 
+    // Performance metrics
+    int total_orders = 0;
+    int market_orders = 0;
+    int limit_orders = 0;
+    int buy_orders = 0;
+    int sell_orders = 0;
+
+    double total_latency = 0.0;
+    double total_market_latency  = 0.0;
+    double total_limit_latency = 0.0;
+    double total_buy_latency = 0.0;
+    double total_sell_latency = 0.0;
+    double min_latency = 1e9;
+    double max_latency = 0.0;
+
+    int latency_bucket[7] = {0}; // <1, 1-2, 2-5, 5-10, 10-20, 50-100, >100
+
     void matchOrders(Order& order); // core matching logic
     
 public:
@@ -29,4 +48,6 @@ public:
     void  printTrades() const;
     void cancelOrder(int id);
     void modifyOrder(int id, uint64_t price, int qty, bool is_market);
+    void printMetrics() const;
+    void resetMetrics();
 };

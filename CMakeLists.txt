@@ -13,6 +13,7 @@ add_executable(orderbook
     src/order_book.cpp
     src/order.cpp
     src/price_level.cpp
+    src/timer.cpp
 )
 
 set_target_properties(orderbook PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_SOURCE_DIR}")
