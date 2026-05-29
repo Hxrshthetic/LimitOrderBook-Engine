@@ -48,8 +48,8 @@ int main() {
 
     book.resetMetrics();
 
-    for(int i = 0; i < NUM_ORDERS; i++) {
-        int id = 2000 + i;
+    for(uint64_t i = 0; i < NUM_ORDERS; i++) {
+        uint64_t id = 2000 + i;
         bool is_buy = (side_dist(rng) == 0);
         bool is_market = (type_dist(rng) == 0);
         uint64_t price = is_market ? 0 : price_dist(rng);

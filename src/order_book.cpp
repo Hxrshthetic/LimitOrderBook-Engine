@@ -3,6 +3,69 @@
 #include "order_book.hpp"
 #include "timer.hpp"
 
+void  OrderBook::matchOrders(Order& order) {
+    if(order.is_buy) {
+        auto it = asks.begin();
+        while(order.quantity > 0 && it != asks.end()) {
+            if(!order.is_market && order.price < it->first) {
+                break; // cannot cross further asks
+            }
+
+            PriceLevel& level = it->second;
+            auto order_it = level.orders.begin();
+            while(order.quantity > 0 && order_it != level.orders.end()) {
+                int fillQty = std::min(order.quantity, order_it->quantity);
+                trades.emplace_back(level.price, fillQty);
+
+                order.quantity -= fillQty;
+                order_it->quantity -= fillQty;
+
+                if(order_it->quantity == 0) {
+                    uint64_t id = order_it->order_id;
+                    order_it = level.orders.erase(order_it);
+                    order_idx.erase(id);
+                } else {
+                    order_it++;
+                }
+            }
+            if(level.orders.empty()) {
+                it = asks.erase(it);
+            } else {
+                it++;
+            }
+        }
+    } else {
+        auto it = bids.begin();
+        while(order.quantity > 0 && it != bids.end()) {
+            if(!order.is_market && order.price > it->first) {
+                break; // cannot cross further bids. Price too high
+            }
+            PriceLevel& level = it->second;
+            auto order_it = level.orders.begin();
+            while(order.quantity > 0 && order_it != level.orders.end()) {
+                int fillQty = std::min(order.quantity, order_it->quantity);
+                trades.emplace_back(level.price, fillQty);
+
+                order.quantity -= fillQty;
+                order_it->quantity -= fillQty;
+
+                if(order_it->quantity == 0) {
+                    uint64_t id = order_it->order_id;
+                    order_it = level.orders.erase(order_it);
+                    order_idx.erase(id);
+                } else {
+                    order_it++;
+                }
+            }
+            if(level.orders.empty()) {
+                it = bids.erase(it);
+            } else {
+                it++;
+            }
+        }
+    }
+}
+
 void OrderBook::addOrder(const Order& order) {
     auto start = get_time();
 
@@ -60,6 +123,60 @@ void OrderBook::addOrder(const Order& order) {
     if(latency > max_latency) max_latency = latency;
 }
 
+void OrderBook::cancelOrder(uint64_t id) {
+    auto it = order_idx.find(id);
+    if(it == order_idx.end()) {
+        std::cout << "Order: " << id << " is not found.\n";
+        return;
+    }
+
+    OrderLocation& location = order_idx[id];
+    location.level_it->second.orders.erase(location.order_it);
+
+    if(location.level_it->second.orders.empty()) {
+        if(location.is_buy) {
+            bids.erase(location.level_it);
+        } else {
+            asks.erase(location.level_it);
+        }
+    }
+
+    order_idx.erase(it);
+    std::cout << "Order " << id << " cancelled.\n";
+}
+
+void OrderBook::modifyOrder(uint64_t id, uint64_t new_price, int new_qty, bool is_market) {
+    auto it = order_idx.find(id);
+    if(it == order_idx.end()) {
+        std::cout << "Order " << id << " not found.\n";
+        return;
+    }
+    bool was_buy = it->second.is_buy;
+    cancelOrder(id);
+
+    Order new_order{id, was_buy, is_market, new_price, new_qty};
+    addOrder(new_order);
+}
+
+void OrderBook::applyExecution(uint64_t id, int executed_shares) {
+    if(executed_shares <= 0) return;
+    auto it = order_idx.find(id);
+    if(it == order_idx.end()) return;
+    OrderLocation& location = it->second;
+    Order& order = *location.order_it;
+    int fillqty = std::min(order.quantity, executed_shares);
+    trades.emplace_back(order.price, fillqty);
+    order.quantity -= fillqty;
+    if(order.quantity == 0) {
+        location.level_it->second.orders.erase(location.order_it);
+        if(location.level_it->second.orders.empty()) {
+            if(order.is_buy) bids.erase(location.level_it);
+            else asks.erase(location.level_it);
+        }
+        order_idx.erase(it);
+    }
+}
+
 void OrderBook::printBook() const {
     std::cout << "\n--- Bids (buy orders) ---\n";
     for(const auto& [price, level]: bids) {
@@ -86,105 +203,6 @@ void OrderBook::printTrades() const {
         std::cout << "TRADE: price " << trade.first << " cents, quantity " << trade.second << "\n";
     }
 }
-
-void  OrderBook::matchOrders(Order& order) {
-    if(order.is_buy) {
-        auto it = asks.begin();
-        while(order.quantity > 0 && it != asks.end()) {
-            if(!order.is_market && order.price < it->first) {
-                break; // cannot cross further asks
-            }
-
-            PriceLevel& level = it->second;
-            auto order_it = level.orders.begin();
-            while(order.quantity > 0 && order_it != level.orders.end()) {
-                int fillQty = std::min(order.quantity, order_it->quantity);
-                trades.emplace_back(level.price, fillQty);
-
-                order.quantity -= fillQty;
-                order_it->quantity -= fillQty;
-
-                if(order_it->quantity == 0) {
-                    int id = order_it->order_id;
-                    order_it = level.orders.erase(order_it);
-                    order_idx.erase(id);
-                } else {
-                    order_it++;
-                }
-            }
-            if(level.orders.empty()) {
-                it = asks.erase(it);
-            } else {
-                it++;
-            }
-        }
-    } else {
-        auto it = bids.begin();
-        while(order.quantity > 0 && it != bids.end()) {
-            if(!order.is_market && order.price > it->first) {
-                break; // cannot cross further bids. Price too high
-            }
-            PriceLevel& level = it->second;
-            auto order_it = level.orders.begin();
-            while(order.quantity > 0 && order_it != level.orders.end()) {
-                int fillQty = std::min(order.quantity, order_it->quantity);
-                trades.emplace_back(level.price, fillQty);
-
-                order.quantity -= fillQty;
-                order_it->quantity -= fillQty;
-
-                if(order_it->quantity == 0) {
-                    int id = order_it->order_id;
-                    order_it = level.orders.erase(order_it);
-                    order_idx.erase(id);
-                } else {
-                    order_it++;
-                }
-            }
-            if(level.orders.empty()) {
-                it = bids.erase(it);
-            } else {
-                it++;
-            }
-        }
-    }
-}
-
-void OrderBook::cancelOrder(int id) {
-    auto it = order_idx.find(id);
-    if(it == order_idx.end()) {
-        std::cout << "Order: " << id << " is not found.\n";
-        return;
-    }
-
-    OrderLocation& location = order_idx[id];
-    location.level_it->second.orders.erase(location.order_it);
-
-    if(location.level_it->second.orders.empty()) {
-        if(location.is_buy) {
-            bids.erase(location.level_it);
-        } else {
-            asks.erase(location.level_it);
-        }
-    }
-
-    order_idx.erase(it);
-    std::cout << "Order " << id << " cancelled.\n";
-}
-
-void OrderBook::modifyOrder(int id, uint64_t new_price, int new_qty, bool is_market) {
-    auto it = order_idx.find(id);
-    if(it == order_idx.end()) {
-        std::cout << "Order " << id << " not found.\n";
-        return;
-    }
-    bool was_buy = it->second.is_buy;
-    cancelOrder(id);
-
-    Order new_order{id, was_buy, is_market, new_price, new_qty};
-    addOrder(new_order);
-}
-
 
 void OrderBook::printMetrics() const {
     if (total_orders == 0) {
